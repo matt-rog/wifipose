@@ -1,0 +1,7 @@
+numpy
+opencv-python
+torch
+
+# teacher label generation (GPU machine)
+# apple/ml-comotion        https://github.com/apple/ml-comotion
+# detectron2 + DensePose   https://github.com/facebookresearch/detectron2
