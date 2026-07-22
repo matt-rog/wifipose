@@ -52,10 +52,10 @@ def draw_openpose(frame, kp18, scale, thin=False):
         mx, my = (x1 + x2) // 2, (y1 + y2) // 2
         length = int(np.hypot(x2 - x1, y2 - y1) / 2)
         ang = int(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
-        cv2.ellipse(canvas, (mx, my), (length, 4), ang, 0, 360, color, -1)
+        cv2.ellipse(canvas, (mx, my), (max(length, 1), 6), ang, 0, 360, color, -1)
     if not thin:
         for k, color in enumerate(OP_COLORS):
-            cv2.circle(canvas, tuple(pts[k]), 4, color, -1)
+            cv2.circle(canvas, tuple(pts[k]), 5, color, -1)
     return cv2.addWeighted(frame, 0.4, canvas, 0.6, 0)
 
 
@@ -70,20 +70,20 @@ def dp_overlay(frame, partmap, nparts):
     return out
 
 
-def to_camera(Jc, R, pelvis, h):
-    """Invert canonicalization: J_cam = R^T (J_canon * h) + pelvis."""
-    return np.einsum("ji,kj->ki", R, Jc * h) + pelvis
-
-
-def draw_overlay(frame, J_cam, K, color, scale):
-    """Perspective-project camera-frame joints onto the frame (CoMotion K)."""
-    z = np.clip(J_cam[:, 2:3], 1e-3, None)
-    uv = (J_cam[:, :2] / z) * K[0] + K[1]
-    pts = [(int(u * scale), int(v * scale)) for u, v in uv]
+def draw_skel(panel, J, color, cx, cy, sc):
+    """Root-centered canonical-frame skeleton (x right, z up)."""
+    pts = [(int(cx + J[j, 0] * sc), int(cy - J[j, 2] * sc)) for j in range(24)]
     for c, p in BONES:
-        cv2.line(frame, pts[c], pts[p], color, 2)
+        cv2.line(panel, pts[c], pts[p], color, 2)
     for x, y in pts:
-        cv2.circle(frame, (x, y), 3, color, -1)
+        cv2.circle(panel, (x, y), 2, color, -1)
+
+
+def ema(X, a=0.3):
+    out = X.copy()
+    for i in range(1, len(X)):
+        out[i] = a * X[i] + (1 - a) * out[i - 1]
+    return out
 
 
 def main(a):
@@ -93,36 +93,32 @@ def main(a):
     if not os.path.exists(video):
         video = p(f"{a.holdout}.mp4")
 
-    # skeleton: pose from WiFi, per-frame placement (R_can, pelvis) from the
-    # teacher, both projected onto the video with CoMotion's default intrinsics
+    # skeleton: root-relative comparison, no teacher information in the
+    # prediction rendering (both skeletons centered at their own root)
     Y = np.load(p(f"{a.holdout}_Y.npz"), allow_pickle=True)
     k = valid_mask(cho, Y["label_ts"])
     Jt = Y["J_canon"][k].astype(np.float32)
-    R, pelvis, h = Y["R_can"][k], Y["pelvis"][k], float(Y["height"])
     fidx = Y["frame_idx"][k]
-    Jp = np.load(p("skeleton_holdout_pred.npy"))
+    Jp = ema(np.load(p("skeleton_holdout_pred.npy")))
     rep = json.load(open(p("skeleton_report.json")))
     n = min(len(Jp), len(Jt))
     cap = cv2.VideoCapture(video)
-    W = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-    H = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    K = (2 * max(W, H), np.array([W / 2, H / 2]))  # fx=fy=2*max(H,W), center pp
-    LW, LH = 1280, 720
-    scale = LW / W
+    LW, LH, PW = 640, 360, 400
     out = cv2.VideoWriter(p("skeleton_holdout.mp4"), cv2.VideoWriter_fourcc(*"mp4v"),
-                          30.0, (LW, LH))
+                          30.0, (LW + PW, LH))
+    cx, cy, sc = PW // 2, int(LH * 0.62), 150
     for i in range(n):
         cap.set(1, int(fidx[i]))
         ok, frame = cap.read()
         if not ok:
             break
-        frame = cv2.resize(frame, (LW, LH))
-        draw_overlay(frame, to_camera(Jt[i], R[i], pelvis[i], h), K, (160, 160, 160), scale)
-        draw_overlay(frame, to_camera(Jp[i], R[i], pelvis[i], h), K, (0, 220, 120), scale)
-        cv2.putText(frame, f"wifi (green) vs teacher (gray)  MPJPE {rep['mpjpe']:.0f}mm  "
-                    f"wrist-z r={rep['wrist_z_r']:.2f}", (10, LH - 14),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (120, 220, 120), 1, cv2.LINE_AA)
-        out.write(frame)
+        left = cv2.resize(frame, (LW, LH))
+        panel = np.full((LH, PW, 3), 20, np.uint8)
+        draw_skel(panel, Jt[i] - Jt[i, PELV], (150, 150, 150), cx, cy, sc)
+        draw_skel(panel, Jp[i] - Jp[i, PELV], (0, 220, 120), cx, cy, sc)
+        cv2.putText(panel, f"MPJPE {rep['mpjpe']:.0f}mm  wrist-z r={rep['wrist_z_r']:.2f}",
+                    (8, LH - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (120, 220, 120), 1)
+        out.write(np.hstack([left, panel]))
     cap.release(); out.release()
     print(f"skeleton_holdout.mp4 ({n} frames)")
 
@@ -136,28 +132,28 @@ def main(a):
         Kt = kp[:m][k][:, :, :2]
         root = 0.5 * (Kt[:, 11] + Kt[:, 12])
         torso = np.linalg.norm(0.5 * (Kt[:, 5] + Kt[:, 6]) - root, axis=1) + 1e-6
-        Kp = np.load(p("openpose_holdout_pred.npy"))  # root-relative, torso units
-        Kp = Kp * torso[:len(Kp), None, None] + root[:len(Kp), None]
+        Kt_rel = (Kt - root[:, None]) / torso[:, None, None]
+        Kp = ema(np.load(p("openpose_holdout_pred.npy")))  # root-relative, torso units
         orep = json.load(open(p("openpose_report.json")))
         cap = cv2.VideoCapture(video)
-        W = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        LW, LH = 1280, 720
-        scale = LW / W
+        LW, LH, PW = 640, 360, 400
+        cx, cy, sc = PW // 2, int(LH * 0.42), 95
         out = cv2.VideoWriter(p("openpose_holdout.mp4"),
-                              cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (LW, LH))
+                              cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (LW + PW, LH))
         for j in range(min(len(kf), len(Kp))):
             cap.set(1, int(kf[j]))
             ok, frame = cap.read()
             if not ok:
                 break
-            frame = cv2.resize(frame, (LW, LH))
-            frame = draw_openpose(frame, to_coco18(Kt[j]), scale, thin=True)
-            frame = draw_openpose(frame, to_coco18(Kp[j]), scale)
-            cv2.putText(frame, f"wifi (openpose colors) vs teacher (white)  "
-                        f"PCK@0.2 {orep['pck20']:.2f}  wrist-y r={orep['wrist_y_r']:.2f}",
-                        (10, LH - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
-                        (255, 255, 255), 1, cv2.LINE_AA)
-            out.write(frame)
+            left = cv2.resize(frame, (LW, LH))
+            panel = np.full((LH, PW, 3), 20, np.uint8)
+            panel = draw_openpose(panel, to_coco18(Kt_rel[j]) * sc + [cx, cy], 1.0,
+                                  thin=True)
+            panel = draw_openpose(panel, to_coco18(Kp[j]) * sc + [cx, cy], 1.0)
+            cv2.putText(panel, f"PCK@0.2 {orep['pck20']:.2f} (const "
+                        f"{orep['const_pck20']:.2f})", (8, LH - 12),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+            out.write(np.hstack([left, panel]))
         cap.release(); out.release()
         print("openpose_holdout.mp4")
 
