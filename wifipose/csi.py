@@ -23,4 +23,6 @@ def load_csi(npz_path, mac):
     order = np.argsort(ts, kind="stable")
     amp = np.hypot(raw[order, :, 0], raw[order, :, 1])
     amp /= amp.mean(1, keepdims=True) + 1e-6
+    idx = np.linspace(0, len(KEEP) - 1, N_SUB)
+    amp = np.stack([np.interp(idx, np.arange(len(KEEP)), r) for r in amp])
     return ts[order].astype(np.float64), amp.astype(np.float32)
