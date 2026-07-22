@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from wifipose.csi import load_csi
 from wifipose.dfs import valid_mask
 from wifipose.metrics import PARENTS, PELV
+from wifipose.project import smpl_keypoints_2d
 
 BONES = [(c, PARENTS[c]) for c in range(1, 24)]
 
@@ -36,6 +37,7 @@ COARSE[[5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = 4
 def to_coco18(kp17):
     kp = np.array([kp17[i] if i >= 0 else 0.5 * (kp17[5] + kp17[6])
                    for i in COCO18_FROM_17])
+    kp[14:] = kp[0]  # SMPL teacher has no eyes/ears; collapse face to the head
     return kp
 
 
@@ -122,14 +124,13 @@ def main(a):
     cap.release(); out.release()
     print(f"skeleton_holdout.mp4 ({n} frames)")
 
-    # openpose: predictions are at video frame times where the teacher detected
+    # openpose: teacher keypoints projected from the amodal SMPL teacher
     if os.path.exists(p("openpose_holdout_pred.npy")):
-        kp = np.load(p(f"{a.holdout}_kp.npz"))["kp"]
-        fts = np.load(p(f"{a.holdout}_frame_ts.npy")).astype(np.float64)
-        m = min(len(fts), len(kp))
-        k = valid_mask(cho, fts[:m]) & (kp[:m, :, 2].max(1) > 0)
-        kf = np.where(k)[0]
-        Kt = kp[:m][k][:, :, :2]
+        kp = smpl_keypoints_2d(Y["J_canon"].astype(np.float32), Y["R_can"],
+                               Y["pelvis"], float(Y["height"]))
+        k = valid_mask(cho, Y["label_ts"].astype(np.float64))
+        kf = Y["frame_idx"][k]
+        Kt = kp[k][:, :, :2]
         root = 0.5 * (Kt[:, 11] + Kt[:, 12])
         torso = np.linalg.norm(0.5 * (Kt[:, 5] + Kt[:, 6]) - root, axis=1) + 1e-6
         Kt_rel = (Kt - root[:, None]) / torso[:, None, None]

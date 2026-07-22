@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Train DFS -> COCO-17 2D keypoints (Keypoint R-CNN teacher), root-relative
-and torso-normalized (absolute position is not observable from CSI), evaluated
-on a separate-recording holdout. PCK follows the Person-in-WiFi convention.
+"""Train DFS -> COCO-17 2D keypoints, root-relative and torso-normalized
+(absolute position is not observable from CSI), evaluated on a separate-
+recording holdout. Keypoints are projected from the amodal SMPL teacher, which
+infers off-frame body parts; per-frame keypoint detectors hallucinate them.
+PCK follows the Person-in-WiFi convention.
 
 python train/train_openpose.py --train A --holdout demo --mac <bssid> --data data
 """
@@ -10,6 +12,7 @@ import numpy as np, torch, torch.nn as nn
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from wifipose.csi import load_csi
 from wifipose.dfs import dfs_features, jittered_features, valid_mask
+from wifipose.project import smpl_keypoints_2d
 
 DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SEEDS, EPOCHS, PATIENCE, BS = 5, 300, 40, 256
@@ -74,17 +77,17 @@ def main(a):
     p = lambda n: os.path.join(a.data, n)
     ctr, atr = load_csi(p(f"{a.train}_csi.npz"), a.mac)
     cho, aho = load_csi(p(f"{a.holdout}_csi.npz"), a.mac)
-    ttr_all = np.load(p(f"{a.train}_Y.npz"), allow_pickle=True)["label_ts"].astype(np.float64)
-    tho_all = np.load(p(f"{a.holdout}_frame_ts.npy")).astype(np.float64)
-    kptr = np.load(p(f"{a.train}_kp.npz"))["kp"]
-    kpho = np.load(p(f"{a.holdout}_kp.npz"))["kp"]
-    m = min(len(ttr_all), len(kptr)); ttr_all, kptr = ttr_all[:m], kptr[:m]
-    m = min(len(tho_all), len(kpho)); tho_all, kpho = tho_all[:m], kpho[:m]
+    Ytr_npz = np.load(p(f"{a.train}_Y.npz"), allow_pickle=True)
+    Yho_npz = np.load(p(f"{a.holdout}_Y.npz"), allow_pickle=True)
+    ttr_all = Ytr_npz["label_ts"].astype(np.float64)
+    tho_all = Yho_npz["label_ts"].astype(np.float64)
+    kptr = smpl_keypoints_2d(Ytr_npz["J_canon"].astype(np.float32),
+                             Ytr_npz["R_can"], Ytr_npz["pelvis"], float(Ytr_npz["height"]))
+    kpho = smpl_keypoints_2d(Yho_npz["J_canon"].astype(np.float32),
+                             Yho_npz["R_can"], Yho_npz["pelvis"], float(Yho_npz["height"]))
 
-    det_tr = kptr[:, :, 2].max(1) > 0  # drop frames with no teacher detection
-    det_ho = kpho[:, :, 2].max(1) > 0
-    ktr = valid_mask(ctr, ttr_all, margin=0.35) & det_tr
-    kho = valid_mask(cho, tho_all) & det_ho
+    ktr = valid_mask(ctr, ttr_all, margin=0.35)
+    kho = valid_mask(cho, tho_all)
     XA = dfs_features(ctr, atr, ttr_all[ktr])
     XJ = jittered_features(ctr, atr, ttr_all[ktr])
     XD = dfs_features(cho, aho, tho_all[kho])
