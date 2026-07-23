@@ -94,8 +94,8 @@ def main(a):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--train", default="A")
-    ap.add_argument("--holdout", default="demo")
+    ap.add_argument("--train", default="train")
+    ap.add_argument("--holdout", default="holdout")
     ap.add_argument("--mac", required=True)
     ap.add_argument("--data", default="data")
     main(ap.parse_args())

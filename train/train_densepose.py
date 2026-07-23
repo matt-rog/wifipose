@@ -5,7 +5,7 @@ negatives so the model does not hallucinate a person in an empty room.
 Cross-entropy is motion-weighted: pixels that differ from the static modal map
 get MOTION_BOOST x weight, otherwise the loss optimum is a static body blob.
 
-python train/train_densepose.py --train A --holdout demo --empty A_empty --mac <bssid>
+python train/train_densepose.py --train train --holdout holdout --empty empty --mac <bssid>
 """
 import argparse, json, os, sys
 import numpy as np, torch, torch.nn as nn, torch.nn.functional as F
@@ -143,9 +143,9 @@ def main(a):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--train", default="A")
-    ap.add_argument("--holdout", default="demo")
-    ap.add_argument("--empty", default="A_empty")
+    ap.add_argument("--train", default="train")
+    ap.add_argument("--holdout", default="holdout")
+    ap.add_argument("--empty", default="empty")
     ap.add_argument("--mac", required=True)
     ap.add_argument("--data", default="data")
     main(ap.parse_args())

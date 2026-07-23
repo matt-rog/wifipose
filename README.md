@@ -36,16 +36,16 @@ ruview/    RuView baseline (submodule + runners)
 
 ```bash
 ./record/pi_bringup.sh <pi_ip>
-python record/record.py --prefix sync --secs 30
-python record/record.py --prefix A --secs 840
-python record/record.py --prefix A_empty --secs 150
-python record/record.py --prefix demo --secs 36
+python record/record.py --prefix sync --secs 30      # jumping jacks for clock sync
+python record/record.py --prefix train --secs 840    # training session
+python record/record.py --prefix empty --secs 150    # empty room, nobody present
+python record/record.py --prefix holdout --secs 36   # separate recording for eval
 python record/sync_offset.py --prefix sync --mac <bssid>
 
-./teacher/run_comotion.sh A_video.avi <n_frames> A.pt
-python teacher/comotion_targets.py --pt A.pt --frame-ts A_frame_ts.npy \
-    --sync-offset <offset> --out A_Y.npz
-python teacher/densepose_gt.py --video A_video.avi --out A_dp.npz
+./teacher/run_comotion.sh train_video.avi <n_frames> train.pt
+python teacher/comotion_targets.py --pt train.pt --frame-ts train_frame_ts.npy \
+    --sync-offset <offset> --out train_Y.npz          # repeat for holdout
+python teacher/densepose_gt.py --video train_video.avi --out train_dp.npz
 
 python train/train_wave.py --mac <bssid>
 python train/train_skeleton.py --mac <bssid>

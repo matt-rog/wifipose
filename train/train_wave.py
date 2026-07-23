@@ -3,7 +3,7 @@
 cross-recording signal. No augmentation: it removes the absolute-power cue
 this task depends on (ablated 2026-07-21).
 
-python train/train_wave.py --train A --holdout demo --mac <bssid> --data data
+python train/train_wave.py --train train --holdout holdout --mac <bssid> --data data
 """
 import argparse, json, os, sys
 import numpy as np, torch, torch.nn as nn
@@ -96,8 +96,8 @@ def main(a):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--train", default="A")
-    ap.add_argument("--holdout", default="demo")
+    ap.add_argument("--train", default="train")
+    ap.add_argument("--holdout", default="holdout")
     ap.add_argument("--mac", required=True)
     ap.add_argument("--data", default="data")
     main(ap.parse_args())

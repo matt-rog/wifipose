@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Train DFS -> SMPL-24 skeleton, evaluate on a separate-recording holdout.
 
-python train/train_skeleton.py --train A --holdout demo --mac <bssid> --data data
+python train/train_skeleton.py --train train --holdout holdout --mac <bssid> --data data
 """
 import argparse, json, os, sys
 import numpy as np, torch, torch.nn as nn
@@ -138,8 +138,8 @@ def main(a):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--train", default="A")
-    ap.add_argument("--holdout", default="demo")
+    ap.add_argument("--train", default="train")
+    ap.add_argument("--holdout", default="holdout")
     ap.add_argument("--mac", required=True)
     ap.add_argument("--data", default="data")
     ap.add_argument("--weighted", action="store_true",

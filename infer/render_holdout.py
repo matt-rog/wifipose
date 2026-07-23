@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Render holdout predictions next to the camera and teacher ground truth.
 
-python infer/render_holdout.py --holdout demo --mac <bssid> --data data
+python infer/render_holdout.py --holdout holdout --mac <bssid> --data data
 """
 import argparse, json, os, sys
 import numpy as np, cv2
@@ -242,7 +242,7 @@ def main(a):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--holdout", default="demo")
+    ap.add_argument("--holdout", default="holdout")
     ap.add_argument("--mac", required=True)
     ap.add_argument("--data", default="data")
     main(ap.parse_args())

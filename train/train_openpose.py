@@ -5,7 +5,7 @@ recording holdout. Keypoints are projected from the amodal SMPL teacher, which
 infers off-frame body parts; per-frame keypoint detectors hallucinate them.
 PCK follows the Person-in-WiFi convention.
 
-python train/train_openpose.py --train A --holdout demo --mac <bssid> --data data
+python train/train_openpose.py --train train --holdout holdout --mac <bssid> --data data
 """
 import argparse, json, os, sys
 import numpy as np, torch, torch.nn as nn
@@ -155,8 +155,8 @@ def main(a):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--train", default="A")
-    ap.add_argument("--holdout", default="demo")
+    ap.add_argument("--train", default="train")
+    ap.add_argument("--holdout", default="holdout")
     ap.add_argument("--mac", required=True)
     ap.add_argument("--data", default="data")
     main(ap.parse_args())
