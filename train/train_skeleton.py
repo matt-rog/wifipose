@@ -44,7 +44,7 @@ def augment(xb, jit, idx):
     return xb
 
 
-def train_seed(Xtr, XJtr, Ytr, Xv, Yv, lam, unstd, seed):
+def train_seed(Xtr, XJtr, Ytr, Xv, Yv, lam, unstd, seed, no_priors=False):
     torch.manual_seed(seed)
     ntr = len(Xtr)
     net = MLP(Xtr.shape[1]).to(DEV)
@@ -58,13 +58,14 @@ def train_seed(Xtr, XJtr, Ytr, Xv, Yv, lam, unstd, seed):
             idx = torch.randperm(ntr, device=DEV)[:BS]
             pz = net(augment(Xtr[idx].clone(), XJtr, idx))
             L = (hub(pz, Ytr[idx]) * lam).mean()
-            pc, yc = unstd(pz).reshape(-1, 24, 3), unstd(Ytr[idx]).reshape(-1, 24, 3)
-            lp = torch.stack([(pc[:, c] - pc[:, p]).norm(dim=1) for c, p in BONES], 1)
-            ly = torch.stack([(yc[:, c] - yc[:, p]).norm(dim=1) for c, p in BONES], 1)
-            L = L + 0.1 * hub(lp, ly).mean()  # bone length
-            sel = pairs[torch.randint(len(pairs), (BS,), device=DEV)]
-            L = L + 0.5 * hub(unstd(net(Xtr[sel[:, 1]]) - net(Xtr[sel[:, 0]])),
-                              unstd(Ytr[sel[:, 1]] - Ytr[sel[:, 0]])).mean()  # velocity
+            if not no_priors:
+                pc, yc = unstd(pz).reshape(-1, 24, 3), unstd(Ytr[idx]).reshape(-1, 24, 3)
+                lp = torch.stack([(pc[:, c] - pc[:, p]).norm(dim=1) for c, p in BONES], 1)
+                ly = torch.stack([(yc[:, c] - yc[:, p]).norm(dim=1) for c, p in BONES], 1)
+                L = L + 0.1 * hub(lp, ly).mean()  # bone length
+                sel = pairs[torch.randint(len(pairs), (BS,), device=DEV)]
+                L = L + 0.5 * hub(unstd(net(Xtr[sel[:, 1]]) - net(Xtr[sel[:, 0]])),
+                                  unstd(Ytr[sel[:, 1]] - Ytr[sel[:, 0]])).mean()  # velocity
             opt.zero_grad(); L.backward(); opt.step()
         net.eval()
         with torch.no_grad():
@@ -113,7 +114,7 @@ def main(a):
 
     preds = []
     for sd in range(SEEDS):
-        net = train_seed(Xtr, XJtr, Ytr, Xv, Yv, lam, unstd, sd)
+        net = train_seed(Xtr, XJtr, Ytr, Xv, Yv, lam, unstd, sd, a.no_priors)
         with torch.no_grad():
             preds.append((net(XDt).cpu().numpy() * ys + ym).reshape(-1, 24, 3))
         torch.save(dict(state_dict=net.state_dict(), fm=fm, fs=fs, ym=ym, ys=ys),
@@ -143,4 +144,6 @@ if __name__ == "__main__":
     ap.add_argument("--data", default="data")
     ap.add_argument("--weighted", action="store_true",
                     help="ablation: teacher per-joint loss weights")
+    ap.add_argument("--no-priors", action="store_true",
+                    help="ablation: drop bone-length and velocity losses")
     main(ap.parse_args())
