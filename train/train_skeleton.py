@@ -105,7 +105,9 @@ def main(a):
     Xv = tt((XA[ntr:] - fm) / fs)
     Ytr, Yv = tt(((Yf - ym) / ys)[:ntr]), tt(((Yf - ym) / ys)[ntr:])
     XDt = tt((XD - fm) / fs)
-    lam = tt(np.repeat(Atr["lambda_joint"].astype(np.float32), 3))
+    lam24 = (Atr["lambda_joint"].astype(np.float32) if a.weighted
+             else np.ones(24, np.float32))  # uniform wins the ablation
+    lam = tt(np.repeat(lam24, 3))
     ym_t, ys_t = tt(ym), tt(ys)
     unstd = lambda z: z * ys_t + ym_t
 
@@ -131,4 +133,6 @@ if __name__ == "__main__":
     ap.add_argument("--holdout", default="demo")
     ap.add_argument("--mac", required=True)
     ap.add_argument("--data", default="data")
+    ap.add_argument("--weighted", action="store_true",
+                    help="ablation: teacher per-joint loss weights")
     main(ap.parse_args())
