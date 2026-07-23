@@ -1,7 +1,8 @@
 # wifipose
 
 Pose estimation from single-antenna WiFi CSI. A Raspberry Pi 3B+ (nexmon, 80 MHz)
-streams CSI to a laptop while a synced camera records the subject. CoMotion and
+captures CSI from a WiFi router's transmissions and forwards it to a laptop,
+where a synced camera records the subject. CoMotion and
 DensePose run on the video to produce labels. Doppler features are extracted from
 the CSI amplitude and small models are trained to predict pose, 2D keypoints, and
 coarse body-part maps. Evaluation is on a separate recording, against a
@@ -16,7 +17,7 @@ constant-pose baseline, with wrist correlation and empty-room checks.
 | 2D keypoints | PCK@0.2 0.73 | constant pose: 0.56 |
 | Body-part maps (5-class) | fg-IoU 0.26, empty-room fg 3% | static blob: 0.09 |
 
-Only arm motion is genuinely tracked; static joints come from the pose prior
+Only arm motion is tracked; static joints come from the pose prior
 (see `arms_only_mpjpe` in the skeleton report). `ruview/` runs the RuView
 baseline on the same data for comparison.
 
