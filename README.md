@@ -67,6 +67,9 @@ CFO/SFO offsets make it unusable without a second co-oscillator RX chain.
   also training negatives).
 - The within-session val tail is used for early stopping only — it cannot rank
   cross-recording transfer (measured: models that win val can lose holdout).
+- Skeleton reports include an arms-only hybrid (model arms, train-mean rest):
+  it matches the full model, i.e. WiFi contributes the arm dynamics and the
+  static joints come from the anatomical prior. Read MPJPE accordingly.
 
 ## Reproduce
 

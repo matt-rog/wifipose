@@ -120,7 +120,15 @@ def main(a):
                    p(f"skeleton_seed{sd}.pt"))
     Jp = np.mean(preds, 0)
     rep = pose_report(Jp, Jho)
-    rep["const_mpjpe"] = constant_baseline_mpjpe(Jtr[:ntr], Jho[:min(len(Jp), len(Jho))])
+    n = min(len(Jp), len(Jho))
+    rep["const_mpjpe"] = constant_baseline_mpjpe(Jtr[:ntr], Jho[:n])
+    # arms-only hybrid: model arm chain + train-mean elsewhere. Its gap to the
+    # full model shows how much non-arm pose the model actually contributes
+    # (measured ~0: static joints are anatomical prior, not WiFi signal).
+    ARM = [16, 17, 18, 19, 20, 21, 22, 23]
+    H = np.tile(Jtr[:ntr].mean(0), (n, 1, 1))
+    H[:, ARM] = Jp[:n, ARM]
+    rep["arms_only_mpjpe"] = pose_report(H, Jho[:n])["mpjpe"]
     np.save(p("skeleton_holdout_pred.npy"), Jp)
     json.dump(rep, open(p("skeleton_report.json"), "w"), indent=1)
     for k, v in rep.items():
