@@ -10,7 +10,8 @@ recording the model never saw.
 | Output | Holdout result | Baseline |
 |---|---|---|
 | Arm elevation (1-D) | Pearson r 0.39 | — |
-| SMPL-24 skeleton | MPJPE 54 mm, PA-MPJPE 47 mm, wrist-z r 0.21 | constant pose: 80 mm, r 0 |
+| SMPL-24 skeleton | MPJPE 54 mm, PA-MPJPE 46 mm, wrist-z r 0.22 | constant pose: 80 mm, r 0 |
+| 2D keypoints (COCO-17, root-relative) | PCK@0.2 0.73, PCK@0.5 0.98 | constant pose: 0.56 |
 | Coarse body parts (5-class, 36x64) | fg-IoU 0.17, empty-room fg 1% | static blob: 0.09 |
 
 The RuView baseline (`ruview/`, their model code on the same data)
@@ -43,7 +44,7 @@ CFO/SFO offsets make it unusable without a second co-oscillator RX chain.
 | CSI firmware + Pi tooling | [seemoo-lab/nexmon_csi](https://github.com/seemoo-lab/nexmon_csi), [nexmonster/picsi](https://github.com/nexmonster/picsi) |
 | Doppler-from-amplitude principle | CARM (MobiCom 2015); SHARP (IEEE TMC 2023, [code](https://github.com/signetlabdei/SHARP)) — single-environment, single-person training viability |
 | Multi-link Doppler as the domain-independent feature | Widar3.0 (MobiSys 2019) — this repo uses its single-link slice |
-| Pose teacher | [apple/ml-comotion](https://github.com/apple/ml-comotion) (CoMotion, SMPL-24) |
+| Pose teacher | [apple/ml-comotion](https://github.com/apple/ml-comotion) (CoMotion, SMPL-24; amodal, so 2D keypoints are projected from it rather than taken from a per-frame detector) |
 | Part-map teacher | [detectron2 DensePose](https://github.com/facebookresearch/detectron2/tree/main/projects/DensePose) |
 | Skeleton priors (bone-length + smoothness losses) | WiPose (MobiCom 2020) |
 | Time-shift / frequency-mask augmentation | Strohmayer & Kampel (arXiv 2401.00964, single-antenna cross-domain ablation); RadarSpecAugment (IEEE Sensors Letters 2021) |
