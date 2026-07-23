@@ -81,9 +81,8 @@ def draw_skel(panel, J, color, cx, cy, sc):
         cv2.circle(panel, (x, y), 2, color, -1)
 
 
-def doppler_strip(S, ts, t_now, width, height, span=8.0):
-    """Scrolling Doppler waterfall: x = last `span` seconds, y = speed (0 at
-    bottom), brightness = motion energy at that speed."""
+def doppler_strip(S, ts, t_now, width, height, span=5.0):
+    """Scrolling Doppler waterfall, current frame pinned at the right edge."""
     lo = np.searchsorted(ts, t_now - span)
     hi = np.searchsorted(ts, t_now) + 1
     win = S[max(lo, 0):hi]
@@ -91,8 +90,11 @@ def doppler_strip(S, ts, t_now, width, height, span=8.0):
         win = S[max(hi - 2, 0):hi]
     img = cv2.resize(win.T[::-1], (width, height), interpolation=cv2.INTER_LINEAR)
     img = cv2.applyColorMap((img * 255).astype(np.uint8), cv2.COLORMAP_TURBO)
-    cv2.putText(img, "DFS spectrogram (2s STFT of CSI amplitude), x: time, y: Doppler bin",
-                (8, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.line(img, (width - 3, 0), (width - 3, height), (255, 255, 255), 2)
+    cv2.putText(img, "now", (width - 46, height - 8), cv2.FONT_HERSHEY_SIMPLEX,
+                0.45, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(img, "wifi doppler", (8, 16), cv2.FONT_HERSHEY_SIMPLEX,
+                0.45, (255, 255, 255), 1, cv2.LINE_AA)
     return img
 
 
@@ -114,10 +116,10 @@ def main(a):
     fts_all = np.load(p(f"{a.holdout}_frame_ts.npy")).astype(np.float64)
     kspec = valid_mask(cho2, fts_all)
     spec_ts = fts_all[kspec]
-    spec = dfs_features(cho2, aho, spec_ts)[:, :33]      # low-speed Doppler bins
+    spec = dfs_features(cho2, aho, spec_ts)[:, 2:28]     # skip near-DC bins
     spec = np.log1p(spec)
-    lo_p, hi_p = np.percentile(spec, 5), np.percentile(spec, 99)
-    spec = np.clip((spec - lo_p) / (hi_p - lo_p + 1e-9), 0, 1)
+    lo_p, hi_p = np.percentile(spec, 10), np.percentile(spec, 99.5)
+    spec = np.clip((spec - lo_p) / (hi_p - lo_p + 1e-9), 0, 1) ** 0.7
     STRIP = 90
 
     # skeleton: root-relative comparison, no teacher information in the
