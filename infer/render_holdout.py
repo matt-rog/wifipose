@@ -7,7 +7,7 @@ import argparse, json, os, sys
 import numpy as np, cv2
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from wifipose.csi import load_csi
-from wifipose.dfs import valid_mask
+from wifipose.dfs import dfs_features, valid_mask
 from wifipose.metrics import PARENTS, PELV
 from wifipose.project import smpl_keypoints_2d
 
@@ -81,6 +81,21 @@ def draw_skel(panel, J, color, cx, cy, sc):
         cv2.circle(panel, (x, y), 2, color, -1)
 
 
+def doppler_strip(S, ts, t_now, width, height, span=8.0):
+    """Scrolling Doppler waterfall: x = last `span` seconds, y = speed (0 at
+    bottom), brightness = motion energy at that speed."""
+    lo = np.searchsorted(ts, t_now - span)
+    hi = np.searchsorted(ts, t_now) + 1
+    win = S[max(lo, 0):hi]
+    if len(win) < 2:
+        win = S[max(hi - 2, 0):hi]
+    img = cv2.resize(win.T[::-1], (width, height), interpolation=cv2.INTER_LINEAR)
+    img = cv2.applyColorMap((img * 255).astype(np.uint8), cv2.COLORMAP_TURBO)
+    cv2.putText(img, "DFS spectrogram (2s STFT of CSI amplitude), x: time, y: Doppler bin",
+                (8, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
+    return img
+
+
 def ema(X, a=0.3):
     out = X.copy()
     for i in range(1, len(X)):
@@ -95,6 +110,16 @@ def main(a):
     if not os.path.exists(video):
         video = p(f"{a.holdout}.mp4")
 
+    cho2, aho = load_csi(p(f"{a.holdout}_csi.npz"), a.mac)
+    fts_all = np.load(p(f"{a.holdout}_frame_ts.npy")).astype(np.float64)
+    kspec = valid_mask(cho2, fts_all)
+    spec_ts = fts_all[kspec]
+    spec = dfs_features(cho2, aho, spec_ts)[:, :33]      # low-speed Doppler bins
+    spec = np.log1p(spec)
+    lo_p, hi_p = np.percentile(spec, 5), np.percentile(spec, 99)
+    spec = np.clip((spec - lo_p) / (hi_p - lo_p + 1e-9), 0, 1)
+    STRIP = 90
+
     # skeleton: root-relative comparison, no teacher information in the
     # prediction rendering (both skeletons centered at their own root)
     Y = np.load(p(f"{a.holdout}_Y.npz"), allow_pickle=True)
@@ -107,20 +132,27 @@ def main(a):
     cap = cv2.VideoCapture(video)
     LW, LH, PW = 640, 360, 400
     out = cv2.VideoWriter(p("skeleton_holdout.mp4"), cv2.VideoWriter_fourcc(*"mp4v"),
-                          30.0, (LW + PW, LH))
+                          30.0, (LW + PW, LH + STRIP))
     cx, cy, sc = PW // 2, int(LH * 0.62), 150
+    ts_lab = Y["label_ts"].astype(np.float64)[k]
     for i in range(n):
         cap.set(1, int(fidx[i]))
         ok, frame = cap.read()
         if not ok:
             break
         left = cv2.resize(frame, (LW, LH))
+        cv2.putText(left, "camera", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                    (255, 255, 255), 1, cv2.LINE_AA)
         panel = np.full((LH, PW, 3), 20, np.uint8)
         draw_skel(panel, Jt[i] - Jt[i, PELV], (150, 150, 150), cx, cy, sc)
         draw_skel(panel, Jp[i] - Jp[i, PELV], (0, 220, 120), cx, cy, sc)
-        cv2.putText(panel, f"MPJPE {rep['mpjpe']:.0f}mm  wrist-z r={rep['wrist_z_r']:.2f}",
-                    (8, LH - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (120, 220, 120), 1)
-        out.write(np.hstack([left, panel]))
+        cv2.putText(panel, "green: WiFi prediction (SMPL-24, root-relative)", (8, 22),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 220, 120), 1, cv2.LINE_AA)
+        cv2.putText(panel, "gray: CoMotion teacher (camera)", (8, 42),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.42, (150, 150, 150), 1, cv2.LINE_AA)
+        top = np.hstack([left, panel])
+        strip = doppler_strip(spec, spec_ts, ts_lab[i], top.shape[1], STRIP)
+        out.write(np.vstack([top, strip]))
     cap.release(); out.release()
     print(f"skeleton_holdout.mp4 ({n} frames)")
 
@@ -140,21 +172,27 @@ def main(a):
         LW, LH, PW = 640, 360, 400
         cx, cy, sc = PW // 2, int(LH * 0.42), 95
         out = cv2.VideoWriter(p("openpose_holdout.mp4"),
-                              cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (LW + PW, LH))
+                              cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (LW + PW, LH + STRIP))
+        ts_lab2 = Y["label_ts"].astype(np.float64)[k]
         for j in range(min(len(kf), len(Kp))):
             cap.set(1, int(kf[j]))
             ok, frame = cap.read()
             if not ok:
                 break
             left = cv2.resize(frame, (LW, LH))
+            cv2.putText(left, "camera", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                        (255, 255, 255), 1, cv2.LINE_AA)
             panel = np.full((LH, PW, 3), 20, np.uint8)
             panel = draw_openpose(panel, to_coco18(Kt_rel[j]) * sc + [cx, cy], 1.0,
                                   thin=True)
             panel = draw_openpose(panel, to_coco18(Kp[j]) * sc + [cx, cy], 1.0)
-            cv2.putText(panel, f"PCK@0.2 {orep['pck20']:.2f} (const "
-                        f"{orep['const_pck20']:.2f})", (8, LH - 12),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
-            out.write(np.hstack([left, panel]))
+            cv2.putText(panel, "color: WiFi prediction (COCO keypoints)", (8, 22),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(panel, "white: SMPL-projected teacher (camera)", (8, 42),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 200, 200), 1, cv2.LINE_AA)
+            top = np.hstack([left, panel])
+            strip = doppler_strip(spec, spec_ts, ts_lab2[j], top.shape[1], STRIP)
+            out.write(np.vstack([top, strip]))
         cap.release(); out.release()
         print("openpose_holdout.mp4")
 
@@ -176,7 +214,8 @@ def main(a):
     cap = cv2.VideoCapture(video)
     PW, PH = 560, 315
     out = cv2.VideoWriter(p("densepose_holdout.mp4"), cv2.VideoWriter_fourcc(*"mp4v"),
-                          30.0, (PW * 3, PH))
+                          30.0, (PW * 3, PH + STRIP))
+    ts_frames = fts[:m][k]
     for j in range(min(len(kf), len(probs))):
         cap.set(1, int(kf[j]))
         ok, frame = cap.read()
@@ -188,11 +227,13 @@ def main(a):
             cv2.resize(probs[j, c], (PW, PH), interpolation=cv2.INTER_LINEAR),
             (31, 31), 0) for c in range(5)])
         pm = dp_overlay(rgb, COARSE_VAL[up.argmax(0)], 24)
-        for im, lb in [(rgb, "input"), (gt, "DensePose GT (detectron2)"),
-                       (pm, f"WiFi (ours)  fg-IoU {drep['fg_iou']:.2f}")]:
+        for im, lb in [(rgb, "camera"), (gt, "detectron2 DensePose teacher (camera)"),
+                       (pm, "WiFi prediction (coarse 5-class)")]:
             cv2.putText(im, lb, (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                         (255, 255, 255), 1, cv2.LINE_AA)
-        out.write(np.hstack([rgb, gt, pm]))
+        top = np.hstack([rgb, gt, pm])
+        strip = doppler_strip(spec, spec_ts, ts_frames[j], top.shape[1], STRIP)
+        out.write(np.vstack([top, strip]))
     cap.release(); out.release()
     print("densepose_holdout.mp4")
 
