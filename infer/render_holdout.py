@@ -165,20 +165,29 @@ def main(a):
     k = valid_mask(cho, fts[:m], margin=0.35)
     kf = np.where(k)[0]
     TD = dp[:m][k]
-    pred = np.load(p("densepose_holdout_pred.npy"))
     drep = json.load(open(p("densepose_report.json")))
+    # temporal EMA on class probabilities + bilinear upsampling before argmax:
+    # smooth boundaries and no frame flicker (display only; metrics use raw argmax)
+    probs = np.load(p("densepose_holdout_probs.npy")).astype(np.float32)
+    for j in range(1, len(probs)):
+        probs[j] = 0.35 * probs[j] + 0.65 * probs[j - 1]
+    COARSE_VAL = np.array([0, 2, 24, 19, 8], np.uint8)  # coarse -> representative
+    # fine part id, so both panels share the 24-part colormap scale
     cap = cv2.VideoCapture(video)
     PW, PH = 560, 315
     out = cv2.VideoWriter(p("densepose_holdout.mp4"), cv2.VideoWriter_fourcc(*"mp4v"),
                           30.0, (PW * 3, PH))
-    for j in range(min(len(kf), len(pred))):
+    for j in range(min(len(kf), len(probs))):
         cap.set(1, int(kf[j]))
         ok, frame = cap.read()
         if not ok:
             break
         rgb = cv2.resize(frame, (PW, PH))
         gt = dp_overlay(rgb, TD[j], 24)
-        pm = dp_overlay(rgb, pred[j], 4)
+        up = np.stack([cv2.GaussianBlur(
+            cv2.resize(probs[j, c], (PW, PH), interpolation=cv2.INTER_LINEAR),
+            (31, 31), 0) for c in range(5)])
+        pm = dp_overlay(rgb, COARSE_VAL[up.argmax(0)], 24)
         for im, lb in [(rgb, "input"), (gt, "DensePose GT (detectron2)"),
                        (pm, f"WiFi (ours)  fg-IoU {drep['fg_iou']:.2f}")]:
             cv2.putText(im, lb, (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,

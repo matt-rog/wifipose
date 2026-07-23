@@ -128,6 +128,8 @@ def main(a):
                 torch.cat([net(XEt[s:s + 256]) for s in range(0, len(XEt), 256)]), 1)
         torch.save(dict(state_dict=state, fm=fm, fs=fs), p(f"densepose_seed{sd}.pt"))
 
+    probs_np = (probs_ho / SEEDS).cpu().numpy().astype(np.float16)
+    np.save(p("densepose_holdout_probs.npy"), probs_np)
     pred = probs_ho.argmax(1).cpu().numpy()
     predE = probs_e.argmax(1).cpu().numpy()
     rep = seg_report(pred, TD)
