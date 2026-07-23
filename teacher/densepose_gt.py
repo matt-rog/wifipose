@@ -35,6 +35,6 @@ if __name__=="__main__":
     ap=argparse.ArgumentParser()
     ap.add_argument("--video",required=True); ap.add_argument("--out",required=True)
     ap.add_argument("--start",type=int,default=0); ap.add_argument("--end",type=int,default=-1)
-    ap.add_argument("--config",default="/home/m/sapiens_cal/detectron2/projects/DensePose/configs/densepose_rcnn_R_50_FPN_s1x.yaml")
+    ap.add_argument("--config",default="detectron2/projects/DensePose/configs/densepose_rcnn_R_50_FPN_s1x.yaml")
     ap.add_argument("--weights",default="https://dl.fbaipublicfiles.com/densepose/densepose_rcnn_R_50_FPN_s1x/165712039/model_final_162be9.pkl")
     main(ap.parse_args())

@@ -16,14 +16,17 @@ evaluate on the same separate-recording holdout and metrics as the main repo.
 
 | Metric | RuView (raw amplitude) | wifipose (Doppler) |
 |---|---|---|
-| Skeleton MPJPE | 85.0 mm (constant pose: 79.5) | 54.3 mm |
-| Skeleton wrist-z r | -0.06 | +0.21 |
-| DensePose fg-IoU | 0.147 | 0.167 |
-| DensePose part-mIoU | 0.009 (24-part) | 0.051 (5-part) |
+| Skeleton MPJPE | 85.0 mm (constant pose: 79.5) | 53.9 mm |
+| Skeleton wrist-z r | -0.06 | +0.22 |
+| DensePose fg-IoU | 0.120 | 0.260 |
+| DensePose part-mIoU | 0.007 (24-part) | 0.070 (5-part) |
 
 The skeleton model is worse than predicting the training-mean pose and shows
 zero wrist tracking. The segmentation head localizes a foreground blob but
-cannot separate body parts.
+cannot separate body parts. One nuance in their favor: its per-frame
+matched-vs-shuffled fg-IoU gap (0.043) is larger than ours (~0.005) — raw
+amplitude modulates the foreground frame to frame more than our Doppler
+model does, it just puts the parts in the wrong places.
 
 Notes on the upstream project itself: its DSP pipeline (`verify.py`) passes
 bit-exact, but the shipped pretrained pose model (`pose_v1.safetensors`) is a

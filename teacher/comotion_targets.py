@@ -16,7 +16,7 @@ import sys
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.expanduser("~/sapiens_cal/ml-comotion/src"))
+sys.path.insert(0, os.path.expanduser(os.environ.get("COMOTION_SRC", "ml-comotion/src")))
 
 # ---- SMPL-24 kinematic indices (standard SMPL joint order) ----
 PELVIS, SPINE1, SPINE2, SPINE3, NECK, HEAD = 0, 3, 6, 9, 12, 15

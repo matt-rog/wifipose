@@ -11,8 +11,8 @@ recording the model never saw.
 |---|---|---|
 | Arm elevation (1-D) | Pearson r 0.39 | — |
 | SMPL-24 skeleton | MPJPE 54 mm, PA-MPJPE 46 mm, wrist-z r 0.22 | constant pose: 80 mm, r 0 |
-| 2D keypoints (COCO-17, root-relative) | PCK@0.2 0.73, PCK@0.5 0.98 | constant pose: 0.56 |
-| Coarse body parts (5-class, 36x64) | fg-IoU 0.29, empty-room fg 4% | static blob: 0.09 |
+| 2D keypoints (COCO-17, 13 scored joints) | PCK@0.2 0.73, PCK@0.5 0.98 | constant pose: 0.56 |
+| Coarse body parts (5-class, 36x64) | fg-IoU 0.26, empty-room fg 3% | static blob: 0.09 |
 
 The RuView baseline (`ruview/`, their model code on the same data)
 scores below the constant-pose baseline on skeletons: raw amplitude does not
