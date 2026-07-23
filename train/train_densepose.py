@@ -2,6 +2,8 @@
 """Train DFS -> coarse 5-class body-part maps (36x64), evaluate on a
 separate-recording holdout. Empty-room windows train as all-background
 negatives so the model does not hallucinate a person in an empty room.
+Cross-entropy is motion-weighted: pixels that differ from the static modal map
+get MOTION_BOOST x weight, otherwise the loss optimum is a static body blob.
 
 python train/train_densepose.py --train A --holdout demo --empty A_empty --mac <bssid>
 """
@@ -20,6 +22,7 @@ CMAP[[23, 24]] = 2
 CMAP[[3, 4, 15, 16, 17, 18, 19, 20, 21, 22]] = 3
 CMAP[[5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = 4
 SEEDS, EPOCHS, PATIENCE, BS = 3, 200, 30, 128
+MOTION_BOOST = 25.0
 
 
 class Seg(nn.Module):
@@ -77,6 +80,12 @@ def main(a):
     cnt = np.bincount(Tz[:ntr2].ravel(), minlength=5).astype(np.float32)
     w = np.clip(cnt.sum() / (5 * cnt + 1), 0.3, 5)
     cw = torch.tensor(w / w.mean(), device=DEV, dtype=torch.float32)
+    modal0 = np.zeros((GH, GW), np.int64)
+    for i in range(GH):
+        for j in range(GW):
+            v, c = np.unique(TA[:ntr, i, j], return_counts=True)
+            modal0[i, j] = v[c.argmax()]
+    motion = torch.tensor((Tz[:ntr2] != modal0[None]).astype(np.float32), device=DEV)
 
     probs_ho, probs_e = 0, 0
     for sd in range(SEEDS):
@@ -97,7 +106,9 @@ def main(a):
                 xb = xb + 0.05 * torch.randn_like(xb)
                 xb = xb * (1.0 + 0.15 * torch.randn(len(idx), 1, device=DEV))
                 xb = xb + 0.10 * torch.randn_like(xb) * torch.rand(len(idx), 1, device=DEV)
-                L = F.cross_entropy(net(xb), Ttr[idx], weight=cw)
+                ce = F.cross_entropy(net(xb), Ttr[idx], weight=cw, reduction="none")
+                pw = 1.0 + (MOTION_BOOST - 1.0) * motion[idx]
+                L = (ce * pw).sum() / pw.sum()
                 opt.zero_grad(); L.backward(); opt.step()
             net.eval()
             with torch.no_grad():
@@ -120,12 +131,7 @@ def main(a):
     pred = probs_ho.argmax(1).cpu().numpy()
     predE = probs_e.argmax(1).cpu().numpy()
     rep = seg_report(pred, TD)
-    modal = np.zeros((GH, GW), np.int64)  # static modal-class baseline
-    for i in range(GH):
-        for j in range(GW):
-            v, c = np.unique(TA[:ntr, i, j], return_counts=True)
-            modal[i, j] = v[c.argmax()]
-    rep["static_fg_iou"] = seg_report(np.tile(modal, (len(TD), 1, 1)), TD)["fg_iou"]
+    rep["static_fg_iou"] = seg_report(np.tile(modal0, (len(TD), 1, 1)), TD)["fg_iou"]
     rep["empty_fg_frac"] = float((predE > 0).mean())
     np.save(p("densepose_holdout_pred.npy"), pred)
     json.dump(rep, open(p("densepose_report.json"), "w"), indent=1)
