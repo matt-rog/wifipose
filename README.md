@@ -18,7 +18,10 @@ constant-pose baseline, with wrist correlation and empty-room checks.
 | Body-part maps (5-class) | fg-IoU 0.26, empty-room fg 3% | static blob: 0.09 |
 
 Only arm motion is tracked; static joints come from the pose prior
-(see `arms_only_mpjpe` in the skeleton report). `ruview/` runs the RuView
+(see `arms_only_mpjpe` in the skeleton report). The empty recording is used two
+ways: 80% trains the body-part model as all-background negatives (without them
+it paints a person on every empty-room frame), and the held-out 20% gives the
+`empty_fg_frac` hallucination check in the report. `ruview/` runs the RuView
 baseline on the same data for comparison.
 
 ## Contents
@@ -38,7 +41,7 @@ ruview/    RuView baseline (submodule + runners)
 ./record/pi_bringup.sh <pi_ip>
 python record/record.py --prefix sync --secs 30      # jumping jacks for clock sync
 python record/record.py --prefix train --secs 840    # training session
-python record/record.py --prefix empty --secs 150    # empty room, nobody present
+python record/record.py --prefix empty --secs 150    # empty room: negatives + hallucination check
 python record/record.py --prefix holdout --secs 36   # separate recording for eval
 python record/sync_offset.py --prefix sync --mac <bssid>
 
