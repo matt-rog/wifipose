@@ -1,16 +1,18 @@
 # RuView baseline
 
 Comparison against [ruvnet/RuView](https://github.com/ruvnet/RuView)
-(wifi-densepose), the most visible open-source WiFi-pose project. Their repo is a
-git submodule at `RuView/`; we import their code directly:
+(wifi-densepose), the most visible open-source WiFi-pose project. `RuView/` is
+a git submodule pointing at that repository, and the runners here import their
+code directly:
 
-- `RuView/examples/through-wall/wiflow_train.py`: their CSI->keypoints MLP (`Net`)
+- `RuView/examples/through-wall/wiflow_train.py`: their CSI to keypoints MLP (`Net`)
 - `RuView/archive/v1/src/models/densepose_head.py`: their DensePose head and
-  segmentation loss
+segmentation loss
 
-`run_skeleton.py` / `run_densepose.py` train these on our session A with their
-input representation (windowed raw-amplitude statistics, no Doppler) and
-evaluate on the same separate-recording holdout and metrics as the main repo.
+`run_skeleton.py` and `run_densepose.py` train those on our training session
+using their input representation (windowed raw-amplitude statistics, no
+Doppler), and evaluate on the same separate-recording holdout with the same
+metrics as the main repo.
 
 ## Results (holdout)
 
@@ -21,16 +23,23 @@ evaluate on the same separate-recording holdout and metrics as the main repo.
 | DensePose fg-IoU | 0.120 | 0.260 |
 | DensePose part-mIoU | 0.007 (24-part) | 0.070 (5-part) |
 
-The skeleton model is worse than predicting the training-mean pose and shows
-zero wrist tracking. The segmentation head localizes a foreground blob but
-cannot separate body parts. One nuance in their favor: its per-frame
-matched-vs-shuffled fg-IoU gap (0.043) is larger than ours (~0.005) — raw
-amplitude modulates the foreground frame to frame more than our Doppler
-model does, it just puts the parts in the wrong places.
+Their skeleton model is worse than predicting the training-mean pose and shows
+no wrist tracking. Their segmentation head localizes a foreground blob but does
+not separate body parts.
 
-Notes on the upstream project itself: its DSP pipeline (`verify.py`) passes
-bit-exact, but the shipped pretrained pose model (`pose_v1.safetensors`) is a
-constant predictor (output std 0.0015; PCK@20 2.97% under its own eval), and
-the advertised MM-Fi numbers come from a separate multi-antenna variant, not
-the shipped model. Consistent with our result: their architecture is fine, the
+One nuance in their favor: their per-frame matched-versus-shuffled fg-IoU gap
+is 0.043, where ours is 0.0016. Raw amplitude modulates the predicted
+foreground frame to frame considerably more than our Doppler model does. It
+just puts the parts in the wrong places.
+
+## Notes on the upstream project
+
+Their DSP pipeline (`verify.py`) passes bit-exact, so the signal processing is
+real and deterministic. The shipped pretrained pose model
+(`pose_v1.safetensors`) is a constant predictor: output standard deviation
+0.0015 across 500 varied inputs, and PCK@20 of 2.97% under their own
+evaluation. Their published 82.7% torso-PCK@20 comes from a separate
+multi-antenna MM-Fi variant, not the shipped single-node model.
+
+This is consistent with our own result. Their architecture is reasonable; the
 raw-amplitude single-antenna input is the failure point.

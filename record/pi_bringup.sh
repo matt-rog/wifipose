@@ -41,6 +41,6 @@ except socket.timeout:
     pass
 rate = n / 5
 print(f"CSI rate: {rate:.0f} pkt/s ->", "OK" if rate > 50 else
-      "LOW — check AP channel (nmcli dev wifi list), traffic, chanspec")
+      "LOW, check AP channel (nmcli dev wifi list), traffic, chanspec")
 EOF
 echo "== done. next: python3 csi_presence.py for the live movement check =="

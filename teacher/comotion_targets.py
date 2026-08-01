@@ -31,12 +31,12 @@ MAX_GAP = 3                            # interpolate teacher gaps <= this many f
 
 
 def lambda_joint():
-    """Per-joint loss weight — spend budget on the upper chain (waving demo)."""
+    """Per-joint loss weight: spend budget on the upper chain (waving demo)."""
     lam = np.ones(24, dtype=np.float32)
     lam[[L_WRI, R_WRI]] = 3.5
     lam[[L_ELB, R_ELB]] = 2.0
     lam[[L_SHO, R_SHO]] = 1.5
-    lam[HANDS] = 1.0                   # SMPL hand tips are noisy — don't over-trust
+    lam[HANDS] = 1.0                   # SMPL hand tips are noisy, don't over-trust
     lam[LEGS] = 0.2                    # standing subject: legs barely move, mostly noise
     return lam
 
@@ -100,7 +100,7 @@ def canonicalize(J):
     plus per-frame invert constants (R_can[N,3,3], pelvis[N,3]) and scalar h.
 
     Gravity/up is ESTIMATED from the median spine direction (pelvis->neck) across
-    frames, NOT hardcoded — CoMotion is a camera frame (y-down), so a hardcoded
+    frames, NOT hardcoded. CoMotion is a camera frame (y-down), so a hardcoded
     [0,0,1] would flip everyone upside down (research caveat)."""
     pelvis = J[:, PELVIS].copy()                      # [N,3]
     Jr = J - pelvis[:, None]                           # root-relative
@@ -161,7 +161,7 @@ def main(a):
     w = proxy_weights(J, interp)
     presence = np.zeros(len(frames), np.float32) if a.empty else np.ones(len(frames), np.float32)
 
-    # frame_ts (monotonic, sync-corrected) if provided — enables timestamp pairing
+    # frame_ts (monotonic, sync-corrected) if provided, enables timestamp pairing
     label_ts = None
     if a.frame_ts:
         fts = np.load(a.frame_ts)
@@ -190,10 +190,10 @@ def main(a):
     if label_ts is not None:
         print(f"  label_ts span {label_ts[-1]-label_ts[0]:.1f}s "
               f"[{label_ts[0]:.3f} .. {label_ts[-1]:.3f}]")
-    # sanity: canonical frame should NOT be upside down — head above pelvis (+z)
+    # sanity: canonical frame should NOT be upside down: head above pelvis (+z)
     head_up = Jc[:, HEAD, 2].mean()
     print(f"  canon head z (should be POSITIVE = up): {head_up:+.3f}"
-          f"  {'OK' if head_up > 0 else '*** FLIPPED — check gravity axis ***'}")
+          f"  {'OK' if head_up > 0 else '*** FLIPPED: check gravity axis ***'}")
 
 
 if __name__ == "__main__":
